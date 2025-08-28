@@ -30,74 +30,24 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
 
   // SoundCloud tracks from Aisu Idol corresponding to each dance
   const soundcloudTracks = [
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/villains-glow-up&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Jazz Dance - "Villain's Glow-Up"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/our-stage&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Pop Dance - "Our Stage"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/echoes-of-us&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // You Groove - "Echoes of Us"
     'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/aisus-anthem&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Boom Dance - "Aisu's Anthem"
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/villains-glow-up&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Hip Hop - "Villain's Glow-Up"
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/to-the-meme-and-back&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Shake It Off - "To the Meme and Back"
     'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/late-to-win&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Crystal Beads - "Late to Win"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/to-the-meme-and-back&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false'  // Funny Dancing - "To the Meme and Back"
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/echoes-of-us&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Magic Genie - "Echoes of Us"
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/our-stage&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false'  // OMG Groove - "Our Stage"
   ];
 
-  // Available dance moves (excluding All Night Dance and Idle poses - they are special)
+  // Start with just Hip Hop dance for testing
   const danceMoves: DanceMove[] = [
     {
-      id: ANIMATION_NAMES.JAZZ_DANCE,
-      name: 'Jazz Dance',
-      emoji: '🎷',
-      category: 'latin',
-      difficulty: 4,
-      description: 'Smooth jazz dance with style',
-      gradient: 'from-orange-500 to-red-500',
-      isAvailable: true
-    },
-    {
-      id: ANIMATION_NAMES.POP_DANCE,
-      name: 'Pop Dance',
-      emoji: '🎵',
+      id: ANIMATION_NAMES.HIP_HOP_DANCE,
+      name: 'Hip Hop',
+      emoji: '🎤',
       category: 'modern',
-      difficulty: 4,
-      description: 'Energetic pop dance moves',
-      gradient: 'from-red-500 to-pink-500',
-      isAvailable: true
-    },
-    {
-      id: ANIMATION_NAMES.YOU_GROOVE,
-      name: 'You Groove',
-      emoji: '🕺',
-      category: 'freestyle',
-      difficulty: 3,
-      description: 'Funky groove moves',
-      gradient: 'from-purple-500 to-blue-500',
-      isAvailable: true
-    },
-    {
-      id: ANIMATION_NAMES.BOOM_DANCE,
-      name: 'Boom Dance',
-      emoji: '💥',
-      category: 'modern',
-      difficulty: 4,
-      description: 'Explosive dance moves',
-      gradient: 'from-yellow-500 to-orange-500',
-      isAvailable: true
-    },
-    {
-      id: ANIMATION_NAMES.CRYSTAL_BEADS,
-      name: 'Crystal Beads',
-      emoji: '💎',
-      category: 'freestyle',
       difficulty: 5,
-      description: 'Elegant crystal-inspired moves',
-      gradient: 'from-cyan-500 to-blue-500',
-      isAvailable: true
-    },
-    {
-      id: ANIMATION_NAMES.FUNNY_DANCING,
-      name: 'Funny Dance',
-      emoji: '😂',
-      category: 'freestyle',
-      difficulty: 2,
-      description: 'Hilarious comedy dance',
-      gradient: 'from-green-500 to-teal-500',
+      description: 'Urban hip hop style',
+      gradient: 'from-purple-500 to-pink-500',
       isAvailable: true
     }
   ];
@@ -105,7 +55,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
   const handleDanceSelect = (danceId: AnimationName) => {
     if (selectedAnimation === danceId && isPlayingSelected) {
       // Second tap - go back to Idle pose and stop music
-      onAnimationChange(ANIMATION_NAMES.IDLE_4);
+      onAnimationChange(ANIMATION_NAMES.IDLE);
       setIsPlayingSelected(false);
       setIsMusicPlaying(false);
     } else {
@@ -124,7 +74,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
 
   // Track when we're in idle mode
   useEffect(() => {
-    if (currentAnimation === ANIMATION_NAMES.IDLE_4 || currentAnimation === ANIMATION_NAMES.IDLE_9) {
+    if (currentAnimation === ANIMATION_NAMES.IDLE) {
       setIsPlayingSelected(false);
       setIsMusicPlaying(false);
     }
@@ -133,7 +83,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
   // Sync dance with music state - if music stops, go to idle
   useEffect(() => {
     if (isPlayingSelected && !isMusicPlaying) {
-      onAnimationChange(ANIMATION_NAMES.IDLE_4);
+      onAnimationChange(ANIMATION_NAMES.IDLE);
       setIsPlayingSelected(false);
     }
   }, [isMusicPlaying, isPlayingSelected, onAnimationChange]);
