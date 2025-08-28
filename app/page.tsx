@@ -8,6 +8,7 @@ import SceneEnv from '@/components/SceneEnv';
 import SimpleDanceFloor from '@/components/SimpleDanceFloor';
 import DanceController from '@/components/DanceController';
 import PartyStage from '@/components/PartyStage';
+import PositionControls from '@/components/PositionControls';
 import { AnimationName, ANIMATION_NAMES } from '@/lib/animLoader';
 
 interface ElementPosition {
@@ -16,6 +17,16 @@ interface ElementPosition {
   z: number;
   rotationY: number;
   scale: number;
+}
+
+interface ModelPosition {
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
 }
 
 interface CameraPosition {
@@ -42,30 +53,41 @@ interface LightingPreset {
 }
 
 export default function Home() {
-  const [currentAnimation, setCurrentAnimation] = useState<AnimationName>(ANIMATION_NAMES.ALL_NIGHT_DANCE);
+  const [currentAnimation, setCurrentAnimation] = useState<AnimationName>(ANIMATION_NAMES.IDLE);
   const [characterScene, setCharacterScene] = useState<any>(null);
   const [stagePositions, setStagePositions] = useState<Record<string, ElementPosition>>({});
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  
+  // Model position controls - smaller default scale
+  const [modelPosition, setModelPosition] = useState<ModelPosition>({
+    x: 0,
+    y: 0,
+    z: 0,
+    scale: 0.015,
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0
+  });
   // Camera position (adjustable again)
   const [cameraPosition, setCameraPosition] = useState<CameraPosition>({
     x: 0.00, y: 1.60, z: 8.00, fov: 35
   });
   
-  // Lighting preset
+  // Lighting preset - softer and warmer
   const [lightingPreset, setLightingPreset] = useState<LightingPreset>({
     name: "Club Default",
-    keyLightIntensity: 2.0,
-    keyLightColor: "#ffffff",
-    topLightIntensity: 1.0,
-    topLightColor: "#f0f0f0",
-    ambientIntensity: 0.1,
-    ambientColor: "#404080",
-    rimLight1Intensity: 0.8,
-    rimLight1Color: "#ff1493",
-    rimLight2Intensity: 0.6,
-    rimLight2Color: "#00ced1",
-    environmentIntensity: 0.3,
-    bloomIntensity: 1.5
+    keyLightIntensity: 0.8,
+    keyLightColor: "#ffeaa7",
+    topLightIntensity: 0.4,
+    topLightColor: "#ddd6fe",
+    ambientIntensity: 0.2,
+    ambientColor: "#636e72",
+    rimLight1Intensity: 0.3,
+    rimLight1Color: "#fd79a8",
+    rimLight2Intensity: 0.2,
+    rimLight2Color: "#74b9ff",
+    environmentIntensity: 0.1,
+    bloomIntensity: 0.5
   });
 
   const handleAnimationChange = (animation: AnimationName) => {
@@ -101,8 +123,8 @@ export default function Home() {
         dpr={[1, 2]}
       >
         <Suspense fallback={null}>
-          {/* Environment and Lighting */}
-          <SceneEnv enableBloom={true} lightingPreset={lightingPreset} />
+          {/* Environment and Lighting - Bloom disabled for performance */}
+          <SceneEnv enableBloom={false} lightingPreset={lightingPreset} />
           
           {/* Simple infinite dance floor */}
           <SimpleDanceFloor />
@@ -115,6 +137,7 @@ export default function Home() {
             currentAnimation={currentAnimation}
             onAnimationChange={handleAnimationChange}
             onSceneLoad={handleSceneLoad}
+            position={modelPosition}
           />
         </Suspense>
         
@@ -134,14 +157,18 @@ export default function Home() {
       </Canvas>
 
 
+      {/* Position Controls */}
+      <PositionControls 
+        position={modelPosition}
+        onPositionChange={setModelPosition}
+      />
+
       {/* Professional Dance Controller */}
       <DanceController 
         currentAnimation={currentAnimation}
         onAnimationChange={handleAnimationChange}
         onMusicStateChange={setIsMusicPlaying}
       />
-
-      {/* Character positioning finalized */}
       
     </main>
   );

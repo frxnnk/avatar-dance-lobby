@@ -197,25 +197,13 @@ export function applyClip(
 
 export const ANIMATION_NAMES = {
   IDLE: 'idle',
-  // Dance animations
-  ALL_NIGHT_DANCE: 'all_night_dance',
-  ARM_CIRCLE_SHUFFLE: 'arm_circle_shuffle', 
-  BOOM_DANCE: 'boom_dance',
-  CRYSTAL_BEADS: 'crystal_beads',
-  FUNNY_DANCING: 'funny_dancing',
-  POP_DANCE: 'pop_dance',
-  YOU_GROOVE: 'you_groove',
-  JAZZ_DANCE: 'jazz_dance',
-  // Idle poses
-  IDLE_4: 'idle_4',
-  IDLE_9: 'idle_9',
-  // Movement animations
-  RUNNING: 'running',
-  SKIP_FORWARD: 'skip_forward',
-  TEXTING_WALK: 'texting_walk',
-  WALKING_WOMAN: 'walking_woman',
-  WALKING: 'walking',
-  WAVE_ONE_HAND: 'wave_one_hand'
+  // Dance animations - Using available FBX files
+  BOOM_DANCE: 'Animation_Boom_Dance_withSkin',
+  HIP_HOP_DANCE: 'Animation_Hip_Hop_Dance_withSkin',
+  SHAKE_IT_OFF_DANCE: 'Animation_Shake_It_Off_Dance_withSkin',
+  CRYSTAL_BEADS: 'Animation_Crystal_Beads_withSkin',
+  MAGIC_GENIE: 'Animation_Magic_Genie_withSkin',
+  OMG_GROOVE: 'Animation_OMG_Groove_withSkin'
 } as const;
 
 export type AnimationName = typeof ANIMATION_NAMES[keyof typeof ANIMATION_NAMES];
