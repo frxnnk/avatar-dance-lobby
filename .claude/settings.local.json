@@ -26,7 +26,12 @@
       "WebFetch(domain:soundcloud.com)",
       "Bash(npm run build:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(rm:*)",
+      "WebFetch(domain:developers.soundcloud.com)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
