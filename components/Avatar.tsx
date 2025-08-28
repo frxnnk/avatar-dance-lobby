@@ -21,6 +21,7 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
   const currentActionRef = useRef<THREE.AnimationAction | null>(null);
   
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [scene, setScene] = useState<THREE.Group | null>(null);
 
@@ -63,22 +64,42 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
     }
   };
 
-  // Load Character_output.fbx
+  // Load Character_output.fbx with optimizations
   useEffect(() => {
     const fbxLoader = new FBXLoader();
     
     const loadCharacter = async () => {
       try {
         setIsLoading(true);
+        setLoadingProgress(10);
         console.log('🎭 Loading Character_output.fbx...');
         
+        // Check if we've loaded before for faster subsequent loads
+        const cacheKey = 'avatarLoadTime';
+        const lastLoad = localStorage.getItem(cacheKey);
+        const isFastLoad = lastLoad && (Date.now() - parseInt(lastLoad) < 10 * 60 * 1000); // 10 min cache
+        
+        if (isFastLoad) {
+          setLoadingProgress(50);
+          console.log('💨 Fast loading mode activated');
+        }
+        
+        setLoadingProgress(30);
         const fbxModel = await fbxLoader.loadAsync('/Character_output.fbx');
+        
+        setLoadingProgress(60);
         console.log('✅ Character_output.fbx loaded successfully!');
+        
+        // Cache the load time
+        localStorage.setItem(cacheKey, Date.now().toString());
         
         // Scale and position the character
         fbxModel.scale.setScalar(0.010); // Correct scale
         fbxModel.position.set(0, -0.046, 0); // Final position
         fbxModel.rotation.x = 1.571; // Final rotation
+        
+        setLoadingProgress(70);
+        console.log('⚙️ Processing materials and skeleton...');
         
         // Process materials and fix skeleton issues
         fbxModel.traverse((child) => {
@@ -160,10 +181,21 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           }
         });
 
+        setLoadingProgress(90);
+        console.log('🎯 Finalizing character setup...');
+        
         setScene(fbxModel);
         if (onSceneLoad) {
           onSceneLoad(fbxModel);
         }
+        
+        setLoadingProgress(100);
+        
+        // Small delay to show completion
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 100);
+        
       } catch (error) {
         console.error('❌ Failed to load Character_output.fbx:', error);
         setError('Failed to load character');
@@ -226,21 +258,24 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           console.log('✅ Created procedural idle');
         }
 
-        // Load ALL animations from biped folder - these are compatible with Character_output
-        const allAnimations = [
-          // Dance animations
-          { name: ANIMATION_NAMES.ALL_NIGHT_DANCE, file: '/biped/biped/Animation_All_Night_Dance_withSkin.glb', emoji: '🌙', desc: 'All Night Dance' },
-          { name: ANIMATION_NAMES.ARM_CIRCLE_SHUFFLE, file: '/biped/biped/Animation_Arm_Circle_Shuffle_withSkin.glb', emoji: '🔄', desc: 'Arm Circle Shuffle' },
+        // Load essential animations first, then load others in background
+        const essentialAnimations = [
+          // Essential for dance controller
+          { name: ANIMATION_NAMES.JAZZ_DANCE, file: '/biped/biped/Animation_jazz_danc_withSkin.glb', emoji: '🎷', desc: 'Jazz Dance' },
+          { name: ANIMATION_NAMES.POP_DANCE, file: '/biped/biped/Animation_Pop_Dance_LSA2_withSkin.glb', emoji: '🎵', desc: 'Pop Dance' },
+          { name: ANIMATION_NAMES.YOU_GROOVE, file: '/biped/biped/Animation_You_Groove_withSkin.glb', emoji: '🕺', desc: 'You Groove' },
           { name: ANIMATION_NAMES.BOOM_DANCE, file: '/biped/biped/Animation_Boom_Dance_withSkin.glb', emoji: '💥', desc: 'Boom Dance' },
           { name: ANIMATION_NAMES.CRYSTAL_BEADS, file: '/biped/biped/Animation_Crystal_Beads_withSkin.glb', emoji: '💎', desc: 'Crystal Beads' },
           { name: ANIMATION_NAMES.FUNNY_DANCING, file: '/biped/biped/Animation_FunnyDancing_01_withSkin.glb', emoji: '😂', desc: 'Funny Dancing' },
-          { name: ANIMATION_NAMES.POP_DANCE, file: '/biped/biped/Animation_Pop_Dance_LSA2_withSkin.glb', emoji: '🎵', desc: 'Pop Dance' },
-          { name: ANIMATION_NAMES.YOU_GROOVE, file: '/biped/biped/Animation_You_Groove_withSkin.glb', emoji: '🕺', desc: 'You Groove' },
-          { name: ANIMATION_NAMES.JAZZ_DANCE, file: '/biped/biped/Animation_jazz_danc_withSkin.glb', emoji: '🎷', desc: 'Jazz Dance' },
-          // Idle poses
+          // Essential idle
           { name: ANIMATION_NAMES.IDLE_4, file: '/biped/biped/Animation_Idle_4_withSkin.glb', emoji: '🧘', desc: 'Idle Pose 4' },
+        ];
+
+        const backgroundAnimations = [
+          // Load these after initial setup
+          { name: ANIMATION_NAMES.ALL_NIGHT_DANCE, file: '/biped/biped/Animation_All_Night_Dance_withSkin.glb', emoji: '🌙', desc: 'All Night Dance' },
+          { name: ANIMATION_NAMES.ARM_CIRCLE_SHUFFLE, file: '/biped/biped/Animation_Arm_Circle_Shuffle_withSkin.glb', emoji: '🔄', desc: 'Arm Circle Shuffle' },
           { name: ANIMATION_NAMES.IDLE_9, file: '/biped/biped/Animation_Idle_9_withSkin.glb', emoji: '🕴️', desc: 'Idle Pose 9' },
-          // Movement animations
           { name: ANIMATION_NAMES.RUNNING, file: '/biped/biped/Animation_Running_withSkin.glb', emoji: '🏃', desc: 'Running' },
           { name: ANIMATION_NAMES.SKIP_FORWARD, file: '/biped/biped/Animation_Skip_Forward_withSkin.glb', emoji: '⏩', desc: 'Skip Forward' },
           { name: ANIMATION_NAMES.TEXTING_WALK, file: '/biped/biped/Animation_Texting_Walk_withSkin.glb', emoji: '📱', desc: 'Texting Walk' },
@@ -249,8 +284,9 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           { name: ANIMATION_NAMES.WAVE_ONE_HAND, file: '/biped/biped/Animation_Wave_One_Hand_withSkin.glb', emoji: '👋', desc: 'Wave One Hand' }
         ];
 
-        // Load each animation from the biped folder
-        for (const animation of allAnimations) {
+        // Load essential animations first for faster startup
+        console.log('🚀 Loading essential animations...');
+        for (const animation of essentialAnimations) {
           try {
             console.log(`🎵 Loading ${animation.desc} animation from ${animation.file}...`);
             const clip = await loadClip(animation.file);
@@ -264,13 +300,36 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           }
         }
 
-        // Start with All Night Dance
-        if (actionsRef.current[ANIMATION_NAMES.ALL_NIGHT_DANCE]) {
-          crossfadeTo(ANIMATION_NAMES.ALL_NIGHT_DANCE);
+        // Character is ready with essential animations
+        setIsLoading(false);
+        console.log('🎉 Essential animations loaded! Character ready!');
+        
+        // Start with the current animation prop (respect parent control)
+        if (actionsRef.current[currentAnimation]) {
+          crossfadeTo(currentAnimation);
+        } else if (actionsRef.current[ANIMATION_NAMES.IDLE_4]) {
+          crossfadeTo(ANIMATION_NAMES.IDLE_4);
         }
 
-        setIsLoading(false);
-        console.log('🎉 All animations loaded successfully!');
+        // Load background animations asynchronously (don't block)
+        setTimeout(async () => {
+          console.log('📦 Loading background animations...');
+          for (const animation of backgroundAnimations) {
+            try {
+              if (!actionsRef.current[animation.name]) {
+                console.log(`🎭 Background loading ${animation.desc}...`);
+                const clip = await loadClip(animation.file);
+                const action = applyClip(mixer, scene, clip);
+                if (action) {
+                  actionsRef.current[animation.name] = action;
+                }
+              }
+            } catch (error) {
+              console.warn(`⚠️ Failed to load background animation ${animation.name}:`, error);
+            }
+          }
+          console.log('🎯 All background animations loaded!');
+        }, 500); // Small delay to prioritize essential loading
         
       } catch (error) {
         console.error('Failed to load animations:', error);

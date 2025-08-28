@@ -56,18 +56,24 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
       widgetRef.current = null;
       
       const timer = setTimeout(() => {
+        console.log('🔧 Attempting to initialize SoundCloud Widget...');
+        console.log('window.SC available:', !!window.SC);
+        console.log('iframe ref:', !!iframeRef.current);
+        
         if (window.SC && iframeRef.current) {
-          widgetRef.current = window.SC.Widget(iframeRef.current);
-          console.log(`🎵 Initializing widget for track ${currentTrackIndex}`);
-          
-          widgetRef.current.bind('ready', () => {
-            // Set initial volume when widget is ready
-            try {
-              widgetRef.current.setVolume(volume);
-              console.log(`🔊 Volume set to ${volume}%`);
-            } catch (error) {
-              console.log('Error setting initial volume:', error);
-            }
+          try {
+            widgetRef.current = window.SC.Widget(iframeRef.current);
+            console.log(`🎵 Widget initialized for track ${currentTrackIndex}`);
+            
+            widgetRef.current.bind('ready', () => {
+              console.log('✅ SoundCloud Widget is ready!');
+              // Set initial volume when widget is ready
+              try {
+                widgetRef.current.setVolume(volume);
+                console.log(`🔊 Volume set to ${volume}%`);
+              } catch (error) {
+                console.error('Error setting initial volume:', error);
+              }
             
             // Listen for when music actually starts playing
             widgetRef.current.bind('play', () => {
@@ -86,7 +92,11 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
               console.log('🏁 SoundCloud finished - stopping dance animation');
               setIsMusicPlaying(false);
             });
-          });
+          } catch (error) {
+            console.error('❌ Failed to initialize SoundCloud Widget:', error);
+          }
+        } else {
+          console.warn('⚠️ SoundCloud Widget API not available yet');
         }
       }, 1500); // Increased timeout for better reliability
       
@@ -96,11 +106,16 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
 
   // Update volume when volume state changes
   useEffect(() => {
+    console.log(`🔊 Volume changed to: ${volume}%`);
+    console.log('Widget available:', !!widgetRef.current);
+    console.log('Is playing selected:', isPlayingSelected);
+    
     if (widgetRef.current && isPlayingSelected && typeof widgetRef.current.setVolume === 'function') {
       try {
+        console.log(`⚡ Applying volume ${volume}% to SoundCloud widget`);
         widgetRef.current.setVolume(volume);
       } catch (error) {
-        console.log('Volume control not ready yet, will retry when widget is initialized');
+        console.warn('⚠️ Volume control not ready yet:', error);
       }
     }
   }, [volume, isPlayingSelected]);
