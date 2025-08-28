@@ -8,7 +8,7 @@ import SceneEnv from '@/components/SceneEnv';
 import SimpleDanceFloor from '@/components/SimpleDanceFloor';
 import DanceController from '@/components/DanceController';
 import PartyStage, { SpeakerConfig } from '@/components/PartyStage';
-import SizeControls, { SizeSettings } from '@/components/SizeControls';
+// import SizeControls, { SizeSettings } from '@/components/SizeControls';
 import type { ConfigState } from '@/components/PositionControls';
 // import PositionControls from '@/components/PositionControls';
 import { AnimationName, ANIMATION_NAMES } from '@/lib/animLoader';
@@ -26,6 +26,18 @@ interface CameraPosition {
   y: number;
   z: number;
   fov: number;
+}
+
+interface SizeSettings {
+  danceFloor: {
+    gridSize: number;
+    squareSize: number;
+    spacing: number;
+  };
+  objects: {
+    discoBallScale: number;
+    speakerScale: number;
+  };
 }
 
 interface LightingPreset {
