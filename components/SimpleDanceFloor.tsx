@@ -4,14 +4,21 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-export default function SimpleDanceFloor() {
+interface SimpleDanceFloorProps {
+  gridSize?: number;
+  squareSize?: number;
+  spacing?: number;
+}
+
+export default function SimpleDanceFloor({ 
+  gridSize = 20, 
+  squareSize = 0.5, 
+  spacing = 0.05 
+}: SimpleDanceFloorProps) {
   const groupRef = useRef<THREE.Group>(null);
   const lightsRef = useRef<THREE.Mesh[]>([]);
 
   // Create grid of light panels
-  const gridSize = 20; // 20x20 grid of light squares
-  const squareSize = 0.5;
-  const spacing = 0.05;
   const totalSize = (squareSize + spacing) * gridSize;
 
   const createLightPanels = () => {

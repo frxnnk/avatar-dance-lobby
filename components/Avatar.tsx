@@ -11,9 +11,10 @@ interface AvatarProps {
   currentAnimation: AnimationName;
   onAnimationChange?: (animation: AnimationName) => void;
   onSceneLoad?: (scene: THREE.Group) => void;
+  showLoadingPlaceholder?: boolean;
 }
 
-export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoad }: AvatarProps) {
+export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoad, showLoadingPlaceholder = false }: AvatarProps) {
   const groupRef = useRef<THREE.Group>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionsRef = useRef<Record<string, THREE.AnimationAction>>({});
@@ -79,34 +80,82 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
         fbxModel.position.set(0, -0.046, 0); // Final position
         fbxModel.rotation.x = 1.571; // Final rotation
         
-        // Process materials to respond to lighting
+        // Process materials and fix skeleton issues
         fbxModel.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             if (child.material) {
-              // Clone the material to avoid affecting other instances
-              const material = child.material.clone();
+              // Handle both single materials and arrays of materials
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
               
-              // If it's a basic material, convert to standard material for lighting
-              if (material instanceof THREE.MeshBasicMaterial) {
-                const standardMaterial = new THREE.MeshStandardMaterial({
-                  map: material.map,
-                  color: material.color,
-                  transparent: material.transparent,
-                  opacity: material.opacity,
-                  side: material.side,
-                  alphaTest: material.alphaTest
-                });
-                child.material = standardMaterial;
-              } else if (material instanceof THREE.MeshStandardMaterial) {
-                // Ensure standard material properties are set for good lighting response
-                material.roughness = material.roughness !== undefined ? material.roughness : 0.8;
-                material.metalness = material.metalness !== undefined ? material.metalness : 0.1;
-                child.material = material;
-              }
+              const processedMaterials = materials.map(mat => {
+                // Clone the material to avoid affecting other instances
+                const material = mat.clone();
+                
+                // If it's a basic material, convert to standard material for lighting
+                if (material instanceof THREE.MeshBasicMaterial) {
+                  return new THREE.MeshStandardMaterial({
+                    map: material.map,
+                    color: material.color,
+                    transparent: false, // Fix transparency issue
+                    opacity: 1.0, // Make fully opaque
+                    side: material.side,
+                    alphaTest: 0,
+                    roughness: 0.8,
+                    metalness: 0.1
+                  });
+                } else if (material instanceof THREE.MeshStandardMaterial) {
+                  // Ensure standard material properties are set for good lighting response
+                  material.roughness = material.roughness !== undefined ? material.roughness : 0.8;
+                  material.metalness = material.metalness !== undefined ? material.metalness : 0.1;
+                  material.transparent = false; // Fix transparency
+                  material.opacity = 1.0; // Make fully opaque
+                  return material;
+                } else {
+                  // For other material types, try to make them opaque
+                  if ('transparent' in material) material.transparent = false;
+                  if ('opacity' in material) material.opacity = 1.0;
+                  return material;
+                }
+              });
+              
+              // Assign processed materials back
+              child.material = Array.isArray(child.material) ? processedMaterials : processedMaterials[0];
               
               // Enable shadow casting and receiving
               child.castShadow = true;
               child.receiveShadow = true;
+            }
+            
+            // Keep SkinnedMesh and ensure skeleton is properly initialized
+            if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+              console.log(`🦴 Initializing skeleton for: ${child.name}, bones: ${child.skeleton.bones.length}`);
+              
+              const skeleton = child.skeleton;
+              
+              // Ensure skeleton has proper structure
+              if (skeleton.bones && skeleton.bones.length > 0) {
+                // Initialize bone matrices if needed
+                if (!skeleton.boneMatrices) {
+                  skeleton.boneMatrices = new Float32Array(skeleton.bones.length * 16);
+                }
+                
+                // Ensure all bones have proper matrices
+                skeleton.bones.forEach((bone, index) => {
+                  if (!bone.matrixWorld) {
+                    bone.matrixWorld = new THREE.Matrix4();
+                  }
+                  bone.updateMatrixWorld(true);
+                });
+                
+                // Calculate inverse matrices safely
+                try {
+                  skeleton.calculateInverses();
+                } catch (error) {
+                  console.warn('Skeleton inverse calculation error:', error);
+                }
+                
+                console.log(`✅ Skeleton initialized for ${child.name}`);
+              }
             }
           }
         });
@@ -246,29 +295,51 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
     }
   }, [currentAnimation, isLoading, error, crossfadeTo]);
 
-  // Animation loop
+  // Animation loop with robust error handling
   useFrame((_, delta) => {
-    if (mixerRef.current) {
-      mixerRef.current.update(delta);
+    // Update animation mixer with comprehensive error handling
+    if (mixerRef.current && scene) {
+      try {
+        // Pre-validate all skeletons before animation update
+        let allSkeletonsValid = true;
+        scene.traverse((child) => {
+          if (child instanceof THREE.SkinnedMesh && child.skeleton) {
+            const skeleton = child.skeleton;
+            if (!skeleton.boneMatrices || skeleton.bones.some(bone => !bone.matrixWorld)) {
+              allSkeletonsValid = false;
+              // Try to fix the skeleton
+              skeleton.bones.forEach(bone => {
+                if (!bone.matrixWorld) {
+                  bone.matrixWorld = new THREE.Matrix4();
+                }
+                bone.updateMatrixWorld(true);
+              });
+              if (!skeleton.boneMatrices) {
+                skeleton.boneMatrices = new Float32Array(skeleton.bones.length * 16);
+              }
+            }
+          }
+        });
+        
+        if (allSkeletonsValid) {
+          mixerRef.current.update(delta);
+        } else {
+          console.warn('Skipping animation update - skeleton validation failed');
+        }
+      } catch (error) {
+        console.warn('Animation mixer error:', error);
+        // Don't crash, just skip this frame
+      }
     }
     
+    // Keep character centered
     if (groupRef.current) {
-      const time = Date.now() * 0.001;
-      const baseY = -0.060; // Avatar at floor level
-      
-      // Subtle breathing animation when not dancing
-      if (currentAnimation === ANIMATION_NAMES.IDLE) {
-        groupRef.current.position.y = baseY + Math.sin(time * 1.2) * 0.005;
-        groupRef.current.rotation.y = Math.sin(time * 0.5) * 0.02;
-      } else {
-        // Keep stable position during dances
-        groupRef.current.position.y = baseY;
-        groupRef.current.rotation.y = 0;
-      }
-      
-      // Always keep centered
       groupRef.current.position.x = 0;
       groupRef.current.position.z = 0;
+      // Ensure Y position stays at calibrated level if no animation is active
+      if (!mixerRef.current || !currentActionRef.current?.isRunning()) {
+        groupRef.current.position.y = -0.046;
+      }
     }
   });
 
@@ -293,31 +364,36 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
   }
 
   if (isLoading) {
-    return (
-      <group>
-        <mesh position={[0, 0, 0]}>
-          <sphereGeometry args={[0.3, 8, 6]} />
-          <meshStandardMaterial 
-            color="#4a90e2" 
-            transparent 
-            opacity={0.6}
-            emissive="#1a365d"
-            emissiveIntensity={0.3}
-          />
-        </mesh>
-        {/* Subtle floating animation */}
-        <mesh position={[0, 0.8, 0]}>
-          <sphereGeometry args={[0.15, 6, 4]} />
-          <meshStandardMaterial 
-            color="#6bb6ff" 
-            transparent 
-            opacity={0.4}
-            emissive="#2d5aa0"
-            emissiveIntensity={0.2}
-          />
-        </mesh>
-      </group>
-    );
+    // Only show placeholder spheres if explicitly requested
+    if (showLoadingPlaceholder) {
+      return (
+        <group>
+          <mesh position={[0, 0, 0]}>
+            <sphereGeometry args={[0.3, 8, 6]} />
+            <meshStandardMaterial 
+              color="#4a90e2" 
+              transparent 
+              opacity={0.6}
+              emissive="#1a365d"
+              emissiveIntensity={0.3}
+            />
+          </mesh>
+          {/* Subtle floating animation */}
+          <mesh position={[0, 0.8, 0]}>
+            <sphereGeometry args={[0.15, 6, 4]} />
+            <meshStandardMaterial 
+              color="#6bb6ff" 
+              transparent 
+              opacity={0.4}
+              emissive="#2d5aa0"
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+        </group>
+      );
+    }
+    // Return nothing while loading if placeholder is disabled
+    return null;
   }
 
   return (

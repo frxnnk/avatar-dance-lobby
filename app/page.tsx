@@ -7,6 +7,7 @@ import Avatar from '@/components/Avatar';
 import SceneEnv from '@/components/SceneEnv';
 import SimpleDanceFloor from '@/components/SimpleDanceFloor';
 import DanceController from '@/components/DanceController';
+import LoadingScreen from '@/components/LoadingScreen';
 import PartyStage, { SpeakerConfig } from '@/components/PartyStage';
 // import SizeControls, { SizeSettings } from '@/components/SizeControls';
 import type { ConfigState } from '@/components/PositionControls';
@@ -57,6 +58,18 @@ interface LightingPreset {
 }
 
 export default function Home() {
+  // Loading states
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFullyLoaded, setIsFullyLoaded] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [currentTask, setCurrentTask] = useState('Inicializando sistema de baile...');
+  const [resourcesLoaded, setResourcesLoaded] = useState({
+    avatar: false,
+    animations: false,
+    stage: false,
+    audio: false
+  });
+
   const [currentAnimation, setCurrentAnimation] = useState<AnimationName>(ANIMATION_NAMES.IDLE_4);
   const [characterScene, setCharacterScene] = useState<any>(null);
   const [stagePositions, setStagePositions] = useState<Record<string, ElementPosition>>({});
@@ -156,23 +169,93 @@ export default function Home() {
     }
   };
 
-  // Load configuration on component mount
+  // Check if resources are cached and load accordingly
   React.useEffect(() => {
-    loadSavedConfiguration();
-    
-    // Load SoundCloud Widget API
-    if (!document.getElementById('soundcloud-widget-api')) {
-      const script = document.createElement('script');
-      script.id = 'soundcloud-widget-api';
-      script.src = 'https://w.soundcloud.com/player/api.js';
-      script.async = true;
-      document.head.appendChild(script);
-    }
+    const loadResources = async () => {
+      // Check if we've loaded before (caching)
+      const lastLoad = localStorage.getItem('avatarLastLoad');
+      const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+      const isCached = lastLoad && (Date.now() - parseInt(lastLoad) < cacheExpiry);
+
+      if (isCached) {
+        // Fast load from cache
+        setCurrentTask('Cargando desde caché...');
+        setLoadingProgress(80);
+        loadSavedConfiguration();
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setLoadingProgress(100);
+        setResourcesLoaded({ avatar: true, animations: true, stage: true, audio: true });
+        setTimeout(() => {
+          setIsFullyLoaded(true);
+          setTimeout(() => setIsLoading(false), 100);
+        }, 300);
+        return;
+      }
+
+      // Full load sequence
+      // Stage 1: Initialize (10%)
+      setCurrentTask('Inicializando sistema de baile...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setLoadingProgress(10);
+      setResourcesLoaded(prev => ({ ...prev, stage: true }));
+
+      // Stage 2: Load 3D models (30%)
+      setCurrentTask('Cargando avatar 3D...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setLoadingProgress(30);
+
+      // Stage 3: Load animations (70%)
+      setCurrentTask('Preparando animaciones de baile...');
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      setLoadingProgress(70);
+      setResourcesLoaded(prev => ({ ...prev, animations: true }));
+
+      // Stage 4: Load SoundCloud API (90%)
+      setCurrentTask('Configurando reproductor de música...');
+      // Load SoundCloud Widget API
+      if (!document.getElementById('soundcloud-widget-api')) {
+        const script = document.createElement('script');
+        script.id = 'soundcloud-widget-api';
+        script.src = 'https://w.soundcloud.com/player/api.js';
+        script.async = true;
+        document.head.appendChild(script);
+      }
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setLoadingProgress(90);
+      setResourcesLoaded(prev => ({ ...prev, audio: true }));
+
+      // Stage 5: Final setup (100%)
+      setCurrentTask('Finalizando configuración...');
+      loadSavedConfiguration();
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setLoadingProgress(100);
+      setResourcesLoaded(prev => ({ ...prev, avatar: true }));
+
+      // Cache the load timestamp
+      localStorage.setItem('avatarLastLoad', Date.now().toString());
+
+      // Wait a bit more and then show everything at once
+      setTimeout(() => {
+        setIsFullyLoaded(true);
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 100);
+      }, 500);
+    };
+
+    loadResources();
   }, []);
 
 
   return (
     <>
+      {/* Loading Screen */}
+      <LoadingScreen 
+        isLoading={isLoading}
+        progress={loadingProgress}
+        currentTask={currentTask}
+      />
+
       {/* Hide SoundCloud overlays */}
       <style jsx global>{`
         iframe[src*="soundcloud"] {
@@ -190,7 +273,8 @@ export default function Home() {
       `}</style>
       
       <main className="h-screen bg-black overflow-hidden">
-      {/* 3D Canvas */}
+      {/* 3D Canvas - Only render when fully loaded */}
+      {isFullyLoaded && (
       <Canvas 
         camera={{ 
           position: [cameraPosition.x, cameraPosition.y, cameraPosition.z], 
@@ -218,11 +302,12 @@ export default function Home() {
             speakers={sceneConfig.speakers}
           />
           
-          {/* Avatar */}
+          {/* Avatar - No loading placeholders since we have main loading screen */}
           <Avatar 
             currentAnimation={currentAnimation}
             onAnimationChange={handleAnimationChange}
             onSceneLoad={handleSceneLoad}
+            showLoadingPlaceholder={false}
           />
         </Suspense>
         
@@ -242,14 +327,16 @@ export default function Home() {
           dampingFactor={0.05}
         />
       </Canvas>
+      )}
 
-
-      {/* Professional Dance Controller */}
+      {/* Professional Dance Controller - Only show when fully loaded */}
+      {isFullyLoaded && (
       <DanceController 
         currentAnimation={currentAnimation}
         onAnimationChange={handleAnimationChange}
         onMusicStateChange={setIsMusicPlaying}
       />
+      )}
 
       {/* Position Controls - Removed for cleaner interface */}
       {/* <PositionControls 
