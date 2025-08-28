@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimationName, ANIMATION_NAMES } from '@/lib/animLoader';
 import classNames from 'classnames';
 
@@ -21,21 +21,102 @@ interface DanceControllerProps {
   onMusicStateChange: (isPlaying: boolean) => void;
 }
 
+// SoundCloud Widget API types
+declare global {
+  interface Window {
+    SC: {
+      Widget: (iframe: HTMLIFrameElement) => {
+        bind: (event: string, callback: Function) => void;
+        setVolume: (volume: number) => void;
+        getVolume: (callback: (volume: number) => void) => void;
+        load: (url: string, options?: any) => void;
+        play: () => void;
+        pause: () => void;
+      };
+    };
+  }
+}
+
 export default function DanceController({ currentAnimation, onAnimationChange, onMusicStateChange }: DanceControllerProps) {
   const [selectedAnimation, setSelectedAnimation] = useState<AnimationName | null>(null);
   const [isPlayingSelected, setIsPlayingSelected] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [volume, setVolume] = useState(15); // Start with very low volume
+  const [showVolumeControl, setShowVolumeControl] = useState(false);
+  
+  const widgetRef = useRef<any>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // SoundCloud tracks from Aisu Idol corresponding to each dance
+  // Initialize SoundCloud Widget when iframe loads
+  useEffect(() => {
+    if (isPlayingSelected && iframeRef.current) {
+      // Reset widget reference when track changes
+      widgetRef.current = null;
+      
+      const timer = setTimeout(() => {
+        if (window.SC && iframeRef.current) {
+          widgetRef.current = window.SC.Widget(iframeRef.current);
+          console.log(`🎵 Initializing widget for track ${currentTrackIndex}`);
+          
+          widgetRef.current.bind('ready', () => {
+            // Set initial volume when widget is ready
+            try {
+              widgetRef.current.setVolume(volume);
+              console.log(`🔊 Volume set to ${volume}%`);
+            } catch (error) {
+              console.log('Error setting initial volume:', error);
+            }
+            
+            // Listen for when music actually starts playing
+            widgetRef.current.bind('play', () => {
+              console.log('🎵 SoundCloud started playing - starting dance animation');
+              setIsMusicPlaying(true);
+            });
+            
+            // Listen for when music pauses/stops
+            widgetRef.current.bind('pause', () => {
+              console.log('⏸️ SoundCloud paused - stopping dance animation');
+              setIsMusicPlaying(false);
+            });
+            
+            // Listen for when music finishes
+            widgetRef.current.bind('finish', () => {
+              console.log('🏁 SoundCloud finished - stopping dance animation');
+              setIsMusicPlaying(false);
+            });
+          });
+        }
+      }, 1500); // Increased timeout for better reliability
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isPlayingSelected, currentTrackIndex, volume]);
+
+  // Update volume when volume state changes
+  useEffect(() => {
+    if (widgetRef.current && isPlayingSelected && typeof widgetRef.current.setVolume === 'function') {
+      try {
+        widgetRef.current.setVolume(volume);
+      } catch (error) {
+        console.log('Volume control not ready yet, will retry when widget is initialized');
+      }
+    }
+  }, [volume, isPlayingSelected]);
+
+  // Complete SoundCloud tracks from Aisu Idol (all 10 tracks) - Optimized to minimize overlays
   const soundcloudTracks = [
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/villains-glow-up&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Jazz Dance - "Villain's Glow-Up"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/our-stage&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Pop Dance - "Our Stage"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/echoes-of-us&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // You Groove - "Echoes of Us"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/aisus-anthem&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Boom Dance - "Aisu's Anthem"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/late-to-win&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false', // Crystal Beads - "Late to Win"
-    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/to-the-meme-and-back&color=%23ff5500&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=false&show_artwork=true&show_playcount=true&show_bpm=false'  // Funny Dancing - "To the Meme and Back"
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/the-rise-is-ours&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "The Rise is Ours" (2025-01-08)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/close-to-none&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Close to None" (2025-01-06)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/two-roads&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Two Roads" (2025-01-06)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/two-voices&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Two Voices" (2025-01-05)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/to-the-meme-and-back&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "To the Meme and Back" (2025-01-04)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/late-to-win&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Late to Win" (2025-01-03)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/aisus-anthem&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Aisu's Anthem" (2024-12-31)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/our-stage&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Our Stage" (2024-12-24)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/echoes-of-us&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false', // "Echoes of Us" (2024-12-22)
+    'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/aisu-idol/villains-glow-up&color=%23ff5500&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_artwork=true&show_playcount=false&show_bpm=false'  // "Villain's Glow-Up" (2024-12-19)
   ];
 
   // Available dance moves (excluding All Night Dance and Idle poses - they are special)
@@ -109,16 +190,18 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
       setIsPlayingSelected(false);
       setIsMusicPlaying(false);
     } else {
-      // First tap - play selected animation and change music
+      // First tap or switching between dances
       const danceIndex = danceMoves.findIndex(move => move.id === danceId);
       if (danceIndex !== -1) {
+        // Set new track and dance immediately
         setCurrentTrackIndex(danceIndex);
+        setSelectedAnimation(danceId);
+        setIsPlayingSelected(true);
+        
+        // Start in idle, will switch to dance when music plays
+        onAnimationChange(ANIMATION_NAMES.IDLE_4);
+        setIsMusicPlaying(false);
       }
-      setSelectedAnimation(danceId);
-      // Only start dancing if music will be playing
-      onAnimationChange(danceId);
-      setIsPlayingSelected(true);
-      setIsMusicPlaying(true);
     }
   };
 
@@ -130,13 +213,18 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
     }
   }, [currentAnimation]);
 
-  // Sync dance with music state - if music stops, go to idle
+  // Sync dance with music state - start dancing when music plays, idle when stops
   useEffect(() => {
-    if (isPlayingSelected && !isMusicPlaying) {
-      onAnimationChange(ANIMATION_NAMES.IDLE_4);
-      setIsPlayingSelected(false);
+    if (isPlayingSelected && selectedAnimation) {
+      if (isMusicPlaying) {
+        // Music started playing - begin dance animation
+        onAnimationChange(selectedAnimation);
+      } else {
+        // Music stopped - go to idle pose
+        onAnimationChange(ANIMATION_NAMES.IDLE_4);
+      }
     }
-  }, [isMusicPlaying, isPlayingSelected, onAnimationChange]);
+  }, [isMusicPlaying, isPlayingSelected, selectedAnimation, onAnimationChange]);
 
   // Notify parent about music state changes
   useEffect(() => {
@@ -163,7 +251,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
   }, {} as Record<string, DanceMove[]>);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-md border-t border-white/10">
+    <div className="fixed bottom-2 md:bottom-4 left-4 right-4 md:left-1/2 md:right-auto md:transform md:-translate-x-1/2 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl md:max-w-xl md:w-full">
       {/* Collapse Toggle - All screen sizes */}
       <div className="flex justify-between items-center px-4 py-2 border-b border-white/10">
         <h2 className="text-sm font-medium text-white/90 tracking-wide">
@@ -177,66 +265,101 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
         </button>
       </div>
 
-      {/* Spotify Player - Always visible */}
-      <div className="max-w-4xl mx-auto p-4 pb-2">
-        <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+      {/* SoundCloud Player - Always visible */}
+      <div className="p-2 md:p-3 pb-1 md:pb-2">
+        <div className="bg-white/5 rounded-xl p-2 md:p-3 border border-white/10">
+          <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+            <div className="w-5 h-5 md:w-6 md:h-6 bg-orange-500 rounded-full flex items-center justify-center">
               <span className="text-xs">♪</span>
             </div>
-            <p className="text-white font-medium text-sm">SoundCloud Player</p>
+            <p className="text-white font-medium text-xs md:text-sm">SoundCloud Player</p>
             {isPlayingSelected && (
               <span className="text-green-400 text-xs">🎵 Playing</span>
             )}
             {isPlayingSelected && (
-              <span className="text-white/50 text-xs ml-auto">Volume in player</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => setShowVolumeControl(!showVolumeControl)}
+                  className="text-white/70 hover:text-white text-xs px-2 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                >
+                  🔊 {volume}%
+                </button>
+              </div>
             )}
           </div>
+          
+          {/* Volume Control Slider */}
+          {showVolumeControl && isPlayingSelected && (
+            <div className="mb-3 p-3 bg-white/5 rounded-lg border border-white/10">
+              <div className="flex items-center gap-3">
+                <span className="text-white/70 text-xs">🔇</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={volume}
+                  onChange={(e) => setVolume(parseInt(e.target.value))}
+                  className="flex-1 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                />
+                <span className="text-white/70 text-xs">🔊</span>
+                <span className="text-white text-xs font-mono w-8">{volume}%</span>
+              </div>
+            </div>
+          )}
+
           {isPlayingSelected && selectedAnimation ? (
             <iframe
-              key={currentTrackIndex}
+              ref={iframeRef}
+              key={`sc-${currentTrackIndex}`}
               id="soundcloud-player"
-              src={`${soundcloudTracks[currentTrackIndex] || soundcloudTracks[0]}&auto_play=true`}
+              src={`${soundcloudTracks[currentTrackIndex] || soundcloudTracks[0]}&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false&show_teaser=false&buying=false&download=false&sharing=false&liking=false`}
               width="100%"
               height="166"
               frameBorder="0"
               allow="autoplay"
-              className="rounded-lg"
+              className="rounded-lg h-[150px] md:h-[166px]"
+              style={{
+                filter: 'contrast(1.1) saturate(1.1)',
+                border: 'none',
+                outline: 'none'
+              }}
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
               onLoad={() => {
-                setIsMusicPlaying(true);
+                // Widget initialization will handle music state
               }}
             ></iframe>
           ) : (
-            <div className="h-[166px] bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
-              <p className="text-white/50 text-sm">🎵 Select a dance to play music</p>
+            <div className="h-[150px] md:h-[166px] bg-white/5 rounded-lg flex items-center justify-center border border-white/10">
+              <p className="text-white/50 text-xs md:text-sm">🎵 Select a dance to play music</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Collapsible Content */}
-      <div className={`max-w-4xl mx-auto transition-all duration-300 ${isCollapsed ? 'h-0 overflow-hidden' : 'p-4 pt-0'}`}>
+      <div className={`transition-all duration-300 ${isCollapsed ? 'h-0 overflow-hidden' : 'p-2 md:p-3 pt-0'}`}>
         {/* Mobile: Clean Dance Buttons */}
-        <div className="md:hidden mb-4">
-            <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="md:hidden mb-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-2">
             {danceMoves.filter(move => move.isAvailable).map((move) => (
               <button
                 key={move.id}
                 onClick={() => handleDanceSelect(move.id)}
                 className={classNames(
-                  'flex-shrink-0 px-4 py-3 rounded-xl font-medium text-sm',
-                  'transition-all duration-200 border min-w-[90px]',
+                  'flex-shrink-0 px-3 py-2 rounded-lg font-medium text-xs',
+                  'transition-all duration-200 border min-w-[75px]',
                   {
                     'bg-white/15 border-white/30 text-white': selectedAnimation === move.id && isPlayingSelected,
                     'bg-white/5 border-white/10 text-white/80 hover:bg-white/10': !(selectedAnimation === move.id && isPlayingSelected),
                   }
                 )}
               >
-                <div className="flex flex-col items-center gap-1">
-                  <span className="text-sm opacity-60">{move.emoji}</span>
-                  <span className="text-xs font-medium">{move.name}</span>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-xs opacity-60">{move.emoji}</span>
+                  <span className="text-[10px] font-medium">{move.name}</span>
                   {selectedAnimation === move.id && isPlayingSelected && (
-                    <span className="text-[8px] text-white/50 font-mono">TAP TO STOP</span>
+                    <span className="text-[7px] text-white/50 font-mono">TAP TO STOP</span>
                   )}
                 </div>
               </button>
@@ -244,16 +367,16 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
             </div>
           </div>
 
-        {/* Desktop: Minimalist Dance Grid */}
+        {/* Desktop: Compact Dance Grid */}
         <div className="hidden md:block">
-          <div className="grid grid-cols-6 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {danceMoves.map((move) => (
               <button
                 key={move.id}
                 onClick={() => move.isAvailable && handleDanceSelect(move.id)}
                 disabled={!move.isAvailable}
                 className={classNames(
-                  'p-4 rounded-xl text-center transition-all duration-200 border',
+                  'p-3 rounded-lg text-center transition-all duration-200 border',
                   'hover:scale-105 active:scale-95',
                   {
                     'bg-white/15 border-white/30 text-white shadow-lg': 
@@ -265,8 +388,8 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
                   }
                 )}
               >
-                <div className="flex flex-col items-center gap-2">
-                  <span className="text-lg opacity-70">{move.emoji}</span>
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-sm opacity-70">{move.emoji}</span>
                   <span className="text-xs font-medium">{move.name}</span>
                   {selectedAnimation === move.id && isPlayingSelected && (
                     <span className="text-[8px] text-white/50 font-mono">TAP TO STOP</span>
@@ -281,7 +404,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
         </div>
 
         {/* Clean Footer */}
-        <div className="text-center mt-4 text-white/30 text-xs hidden md:block font-mono">
+        <div className="text-center mt-2 md:mt-3 text-white/30 text-xs hidden md:block font-mono">
           DRAG TO ROTATE • SCROLL TO ZOOM
         </div>
       </div>
