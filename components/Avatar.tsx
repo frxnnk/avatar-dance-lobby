@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,7 +14,7 @@ interface AvatarProps {
   showLoadingPlaceholder?: boolean;
 }
 
-export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoad, showLoadingPlaceholder = false }: AvatarProps) {
+const Avatar = memo(function Avatar({ currentAnimation, onAnimationChange, onSceneLoad, showLoadingPlaceholder = false }: AvatarProps) {
   const groupRef = useRef<THREE.Group>(null);
   const mixerRef = useRef<THREE.AnimationMixer | null>(null);
   const actionsRef = useRef<Record<string, THREE.AnimationAction>>({});
@@ -101,7 +101,9 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
         setLoadingProgress(70);
         console.log('⚙️ Processing materials and skeleton...');
         
-        // Process materials and fix skeleton issues
+        // Process materials and fix skeleton issues - OPTIMIZED
+        const materialCache = new Map<string, THREE.Material>();
+        
         fbxModel.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             if (child.material) {
@@ -109,34 +111,43 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               
               const processedMaterials = materials.map(mat => {
-                // Clone the material to avoid affecting other instances
-                const material = mat.clone();
+                // Create cache key for material reuse
+                const cacheKey = `${mat.type}_${mat.uuid}`;
+                
+                if (materialCache.has(cacheKey)) {
+                  return materialCache.get(cacheKey)!;
+                }
+                
+                let optimizedMaterial: THREE.Material;
                 
                 // If it's a basic material, convert to standard material for lighting
-                if (material instanceof THREE.MeshBasicMaterial) {
-                  return new THREE.MeshStandardMaterial({
-                    map: material.map,
-                    color: material.color,
-                    transparent: false, // Fix transparency issue
-                    opacity: 1.0, // Make fully opaque
-                    side: material.side,
+                if (mat instanceof THREE.MeshBasicMaterial) {
+                  optimizedMaterial = new THREE.MeshStandardMaterial({
+                    map: mat.map,
+                    color: mat.color,
+                    transparent: false,
+                    opacity: 1.0,
+                    side: mat.side,
                     alphaTest: 0,
                     roughness: 0.8,
                     metalness: 0.1
                   });
-                } else if (material instanceof THREE.MeshStandardMaterial) {
-                  // Ensure standard material properties are set for good lighting response
-                  material.roughness = material.roughness !== undefined ? material.roughness : 0.8;
-                  material.metalness = material.metalness !== undefined ? material.metalness : 0.1;
-                  material.transparent = false; // Fix transparency
-                  material.opacity = 1.0; // Make fully opaque
-                  return material;
+                } else if (mat instanceof THREE.MeshStandardMaterial) {
+                  // Reuse existing material, just fix properties
+                  mat.roughness = mat.roughness !== undefined ? mat.roughness : 0.8;
+                  mat.metalness = mat.metalness !== undefined ? mat.metalness : 0.1;
+                  mat.transparent = false;
+                  mat.opacity = 1.0;
+                  optimizedMaterial = mat;
                 } else {
                   // For other material types, try to make them opaque
-                  if ('transparent' in material) material.transparent = false;
-                  if ('opacity' in material) material.opacity = 1.0;
-                  return material;
+                  if ('transparent' in mat) (mat as any).transparent = false;
+                  if ('opacity' in mat) (mat as any).opacity = 1.0;
+                  optimizedMaterial = mat;
                 }
+                
+                materialCache.set(cacheKey, optimizedMaterial);
+                return optimizedMaterial;
               });
               
               // Assign processed materials back
@@ -145,6 +156,11 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
               // Enable shadow casting and receiving
               child.castShadow = true;
               child.receiveShadow = true;
+              
+              // Optimize geometry if possible
+              if (child.geometry && !child.geometry.index) {
+                child.geometry.setIndex(null); // Force indexed geometry for better performance
+              }
             }
             
             // Keep SkinnedMesh and ensure skeleton is properly initialized
@@ -258,17 +274,19 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           console.log('✅ Created procedural idle');
         }
 
-        // Load essential animations first, then load others in background
-        const essentialAnimations = [
-          // Essential for dance controller
-          { name: ANIMATION_NAMES.JAZZ_DANCE, file: '/biped/biped/Animation_jazz_danc_withSkin.glb', emoji: '🎷', desc: 'Jazz Dance' },
-          { name: ANIMATION_NAMES.POP_DANCE, file: '/biped/biped/Animation_Pop_Dance_LSA2_withSkin.glb', emoji: '🎵', desc: 'Pop Dance' },
-          { name: ANIMATION_NAMES.YOU_GROOVE, file: '/biped/biped/Animation_You_Groove_withSkin.glb', emoji: '🕺', desc: 'You Groove' },
-          { name: ANIMATION_NAMES.BOOM_DANCE, file: '/biped/biped/Animation_Boom_Dance_withSkin.glb', emoji: '💥', desc: 'Boom Dance' },
-          { name: ANIMATION_NAMES.CRYSTAL_BEADS, file: '/biped/biped/Animation_Crystal_Beads_withSkin.glb', emoji: '💎', desc: 'Crystal Beads' },
-          { name: ANIMATION_NAMES.FUNNY_DANCING, file: '/biped/biped/Animation_FunnyDancing_01_withSkin.glb', emoji: '😂', desc: 'Funny Dancing' },
-          // Essential idle
-          { name: ANIMATION_NAMES.IDLE_4, file: '/biped/biped/Animation_Idle_4_withSkin.glb', emoji: '🧘', desc: 'Idle Pose 4' },
+        // Prioritized loading: Load most popular animations first
+        const highPriorityAnimations = [
+          // Most used animations first
+          { name: ANIMATION_NAMES.IDLE_4, file: '/biped/biped/Animation_Idle_4_withSkin.glb', emoji: '🧘', desc: 'Idle Pose 4', priority: 1 },
+          { name: ANIMATION_NAMES.JAZZ_DANCE, file: '/biped/biped/Animation_jazz_danc_withSkin.glb', emoji: '🎷', desc: 'Jazz Dance', priority: 2 },
+          { name: ANIMATION_NAMES.POP_DANCE, file: '/biped/biped/Animation_Pop_Dance_LSA2_withSkin.glb', emoji: '🎵', desc: 'Pop Dance', priority: 2 },
+        ];
+        
+        const mediumPriorityAnimations = [
+          { name: ANIMATION_NAMES.YOU_GROOVE, file: '/biped/biped/Animation_You_Groove_withSkin.glb', emoji: '🕺', desc: 'You Groove', priority: 3 },
+          { name: ANIMATION_NAMES.BOOM_DANCE, file: '/biped/biped/Animation_Boom_Dance_withSkin.glb', emoji: '💥', desc: 'Boom Dance', priority: 3 },
+          { name: ANIMATION_NAMES.CRYSTAL_BEADS, file: '/biped/biped/Animation_Crystal_Beads_withSkin.glb', emoji: '💎', desc: 'Crystal Beads', priority: 3 },
+          { name: ANIMATION_NAMES.FUNNY_DANCING, file: '/biped/biped/Animation_FunnyDancing_01_withSkin.glb', emoji: '😂', desc: 'Funny Dancing', priority: 3 },
         ];
 
         const backgroundAnimations = [
@@ -284,25 +302,35 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
           { name: ANIMATION_NAMES.WAVE_ONE_HAND, file: '/biped/biped/Animation_Wave_One_Hand_withSkin.glb', emoji: '👋', desc: 'Wave One Hand' }
         ];
 
-        // Load essential animations first for faster startup
-        console.log('🚀 Loading essential animations...');
-        for (const animation of essentialAnimations) {
-          try {
-            console.log(`🎵 Loading ${animation.desc} animation from ${animation.file}...`);
-            const clip = await loadClip(animation.file);
-            const action = applyClip(mixer, scene, clip);
-            action.setLoop(THREE.LoopRepeat, Infinity);
-            actionsRef.current[animation.name] = action;
-            console.log(`✅ ${animation.emoji} ${animation.desc} animation loaded!`);
-          } catch (error) {
-            console.warn(`❌ Failed to load ${animation.desc}:`, error);
-            // Skip creating procedural fallbacks for now
-          }
-        }
-
-        // Character is ready with essential animations
+        // Load high-priority animations first (parallel loading)
+        console.log('🚀 Loading high-priority animations...');
+        const loadAnimationBatch = async (animations: any[], batchName: string) => {
+          const promises = animations.map(async (animation) => {
+            try {
+              console.log(`🎵 Loading ${animation.desc} animation from ${animation.file}...`);
+              const clip = await loadClip(animation.file);
+              const action = applyClip(mixer, scene, clip);
+              action.setLoop(THREE.LoopRepeat, Infinity);
+              actionsRef.current[animation.name] = action;
+              console.log(`✅ ${animation.emoji} ${animation.desc} animation loaded!`);
+              return { success: true, name: animation.name };
+            } catch (error) {
+              console.warn(`❌ Failed to load ${animation.desc}:`, error);
+              return { success: false, name: animation.name, error };
+            }
+          });
+          
+          const results = await Promise.allSettled(promises);
+          console.log(`📊 ${batchName} batch completed: ${results.filter(r => r.status === 'fulfilled').length}/${results.length} animations loaded`);
+          return results;
+        };
+        
+        // Load critical animations first
+        await loadAnimationBatch(highPriorityAnimations, 'High-priority');
+        
+        // Immediately show the character as ready
         setIsLoading(false);
-        console.log('🎉 Essential animations loaded! Character ready!');
+        console.log('🎉 Critical animations loaded! Character ready!');
         
         // Start with the current animation prop (respect parent control)
         if (actionsRef.current[currentAnimation]) {
@@ -310,26 +338,19 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
         } else if (actionsRef.current[ANIMATION_NAMES.IDLE_4]) {
           crossfadeTo(ANIMATION_NAMES.IDLE_4);
         }
-
-        // Load background animations asynchronously (don't block)
+        
+        // Load medium-priority animations next (non-blocking)
         setTimeout(async () => {
-          console.log('📦 Loading background animations...');
-          for (const animation of backgroundAnimations) {
-            try {
-              if (!actionsRef.current[animation.name]) {
-                console.log(`🎭 Background loading ${animation.desc}...`);
-                const clip = await loadClip(animation.file);
-                const action = applyClip(mixer, scene, clip);
-                if (action) {
-                  actionsRef.current[animation.name] = action;
-                }
-              }
-            } catch (error) {
-              console.warn(`⚠️ Failed to load background animation ${animation.name}:`, error);
-            }
-          }
-          console.log('🎯 All background animations loaded!');
-        }, 500); // Small delay to prioritize essential loading
+          console.log('📦 Loading medium-priority animations...');
+          await loadAnimationBatch(mediumPriorityAnimations, 'Medium-priority');
+        }, 100);
+
+        // Load low-priority animations last (in background)
+        setTimeout(async () => {
+          console.log('🎭 Loading low-priority background animations...');
+          await loadAnimationBatch(backgroundAnimations, 'Background');
+          console.log('🎯 All animations fully loaded!');
+        }, 1000); // Delay to prioritize user interaction
         
       } catch (error) {
         console.error('Failed to load animations:', error);
@@ -461,5 +482,9 @@ export default function Avatar({ currentAnimation, onAnimationChange, onSceneLoa
     </group>
   );
 }
+
+});
+
+export default Avatar;
 
 // Character_output.fbx will be loaded dynamically

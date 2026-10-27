@@ -31,7 +31,8 @@
       "Bash(git stash:*)",
       "Bash(rm:*)",
       "WebFetch(domain:developers.soundcloud.com)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

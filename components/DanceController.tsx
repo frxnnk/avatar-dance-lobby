@@ -92,6 +92,7 @@ export default function DanceController({ currentAnimation, onAnimationChange, o
               console.log('🏁 SoundCloud finished - stopping dance animation');
               setIsMusicPlaying(false);
             });
+            });
           } catch (error) {
             console.error('❌ Failed to initialize SoundCloud Widget:', error);
           }

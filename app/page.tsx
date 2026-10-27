@@ -1,14 +1,16 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useCallback, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import Avatar from '@/components/Avatar';
-import SceneEnv from '@/components/SceneEnv';
-import SimpleDanceFloor from '@/components/SimpleDanceFloor';
-import DanceController from '@/components/DanceController';
 import LoadingScreen from '@/components/LoadingScreen';
-import PartyStage, { SpeakerConfig } from '@/components/PartyStage';
+
+// Lazy load heavy 3D components to improve initial bundle size
+const Avatar = React.lazy(() => import('@/components/Avatar'));
+const SceneEnv = React.lazy(() => import('@/components/SceneEnv'));
+const SimpleDanceFloor = React.lazy(() => import('@/components/SimpleDanceFloor'));
+const DanceController = React.lazy(() => import('@/components/DanceController'));
+const PartyStage = React.lazy(() => import('@/components/PartyStage').then(module => ({ default: module.default })));
 // import SizeControls, { SizeSettings } from '@/components/SizeControls';
 import type { ConfigState } from '@/components/PositionControls';
 // import PositionControls from '@/components/PositionControls';
@@ -91,14 +93,14 @@ export default function Home() {
     danceFloor: { gridSize: 20, squareSize: 0.5, spacing: 0.05 }
   });
 
-  // Size settings (kept for backward compatibility)
-  const sizeSettings: SizeSettings = {
+  // Size settings (kept for backward compatibility) - memoized
+  const sizeSettings: SizeSettings = useMemo(() => ({
     danceFloor: sceneConfig.danceFloor,
     objects: {
       discoBallScale: sceneConfig.discoBall.scale,
       speakerScale: 0.5 // Default speaker scale
     }
-  };
+  }), [sceneConfig.danceFloor, sceneConfig.discoBall.scale]);
   
   // Lighting preset
   const [lightingPreset, setLightingPreset] = useState<LightingPreset>({
@@ -117,17 +119,17 @@ export default function Home() {
     bloomIntensity: 1.5
   });
 
-  const handleAnimationChange = (animation: AnimationName) => {
+  const handleAnimationChange = useCallback((animation: AnimationName) => {
     setCurrentAnimation(animation);
-  };
+  }, []);
 
-  const handleSceneLoad = (scene: any) => {
+  const handleSceneLoad = useCallback((scene: any) => {
     setCharacterScene(scene);
-  };
+  }, []);
 
-  const handleStagePositionUpdate = (element: string, position: ElementPosition) => {
+  const handleStagePositionUpdate = useCallback((element: string, position: ElementPosition) => {
     setStagePositions(prev => ({ ...prev, [element]: position }));
-  };
+  }, []);
 
   const handleCameraUpdate = (position: CameraPosition) => {
     setCameraPosition(position);
@@ -150,9 +152,9 @@ export default function Home() {
     alert('✅ Configuración guardada exitosamente! Esta será la configuración por defecto.');
   };
 
-  const handleMusicPlayStateChange = (isPlaying: boolean) => {
+  const handleMusicPlayStateChange = useCallback((isPlaying: boolean) => {
     setIsMusicPlaying(isPlaying);
-  };
+  }, []);
 
 
   // Load saved configuration on mount
@@ -273,6 +275,15 @@ export default function Home() {
       `}</style>
       
       <main className="h-screen bg-black overflow-hidden">
+      {/* Circular Button - Top Right */}
+      <button
+        onClick={() => window.open('https://aisu.fun', '_blank')}
+        className="fixed top-4 right-4 z-50 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-lg"
+        aria-label="Visit Aisu Fun"
+      >
+        <span className="text-white text-sm font-medium">aisu.fun</span>
+      </button>
+
       {/* 3D Canvas - Only render when fully loaded */}
       {isFullyLoaded && (
       <Canvas 
@@ -282,8 +293,9 @@ export default function Home() {
         }}
         shadows
         dpr={[1, 2]}
+        performance={{ min: 0.1 }} // Improve performance on slower devices
       >
-        <Suspense fallback={null}>
+        <Suspense fallback={<mesh><boxGeometry args={[0.1, 0.1, 0.1]} /><meshBasicMaterial color="blue" /></mesh>}>
           {/* Environment and Lighting */}
           <SceneEnv enableBloom={true} lightingPreset={lightingPreset} />
           
@@ -331,11 +343,13 @@ export default function Home() {
 
       {/* Professional Dance Controller - Only show when fully loaded */}
       {isFullyLoaded && (
-      <DanceController 
-        currentAnimation={currentAnimation}
-        onAnimationChange={handleAnimationChange}
-        onMusicStateChange={setIsMusicPlaying}
-      />
+      <Suspense fallback={<div className="fixed bottom-4 left-4 w-16 h-16 bg-gray-800 rounded-lg animate-pulse"></div>}>
+        <DanceController 
+          currentAnimation={currentAnimation}
+          onAnimationChange={handleAnimationChange}
+          onMusicStateChange={setIsMusicPlaying}
+        />
+      </Suspense>
       )}
 
       {/* Position Controls - Removed for cleaner interface */}
